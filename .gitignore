@@ -1,0 +1,32 @@
+__pycache__/
+.venv/
+clean_cache.bat
+.continue
+.venv
+*.pyc
+*.pyo
+*.pyd
+.idea/
+app/db/data
+
+alembic/
+alembic/versions
+alembic.ini
+
+docker-compose.yml
+conftest.py
+pytest.ini
+
+# IDEs and editors
+.editorconfig
+.idea/
+
+
+# Visual Studio Code
+.vscode/
+.devcontainer/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.history/*
