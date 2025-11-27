@@ -1,0 +1,12 @@
+services:
+  fastapi:
+    build: .
+    container_name: social-login-google
+    ports:
+      - "8000:8000"
+    env_file:
+      - app/.env.hml
+    volumes:
+      - .:/app   # live code sync (hot reload)
+    environment:
+      - PYTHONUNBUFFERED=1
