@@ -1,4 +1,4 @@
-from app.api.v1.routers import (users, auth, permissions, roles)
+from app.api.v1.routers import (users, auth, permissions, roles, social_auth)
 from app.core.config import settings
 from app.core.routers import emails
 
@@ -13,6 +13,7 @@ def bootstrap_app(app):
         app.include_router(permissions.router, prefix=prefix, tags=["Permissoes"])
         app.include_router(users.router, prefix=prefix, tags=["Usuários"])
         app.include_router(auth.router, prefix=prefix, tags=["Authentication"])
+        app.include_router(social_auth.router, prefix=prefix, tags=["Social Authentication"])
         print("Application started successfully.")
 
     except ValueError:

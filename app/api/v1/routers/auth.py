@@ -458,7 +458,7 @@ async def login_for_access_token(
 
 
 @router.post(
-    "/logout",
+    "/logouta",
     response_model=ApiResponse,
     summary="User logout",
     description="Logs out the user by clearing authentication cookies",

@@ -1,265 +1,244 @@
-from fastapi import APIRouter, HTTPException, status, Response, Request, Depends
-from datetime import datetime
+from fastapi import APIRouter, HTTPException, status, Response, Request, Cookie, Depends
+from typing import Optional
+from datetime import timedelta
 
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-
-from app.api.v1.models import AuditLog
-from app.api.v1.schemas.google import GoogleCallbackRequest
-from app.api.v1.services.google_auth_service import create_access_token, create_refresh_token, set_auth_cookies, \
-    get_or_create_user
 from app.core.config import settings
 from app.api.v1.schemas import (
+    TokenExchangeRequest,
     TokenResponse,
     User,
-    RefreshToken,
+    UserResponse,
+    RefreshTokenRequest
 )
 from app.api.v1.services import (
     exchange_code_for_tokens,
+    get_google_user_info,
     verify_google_id_token,
+    create_or_update_user,
     store_refresh_token,
+    verify_refresh_token,
+    revoke_refresh_token,
+    revoke_all_user_tokens,
+    generate_refresh_token,
+    create_audit_log,
+    get_current_user
 )
-from app.core.middlewares.logging import logger
-from app.core.security import hash_token
-from app.db.session import get_db
-
+# from models import User
 
 router = APIRouter(prefix="/google-auth", tags=["Google Authentication"])
 
 
-@router.post("/callback", response_model=TokenResponse)
-async def google_callback(
-        payload: GoogleCallbackRequest,
-        request: Request,
-        response: Response,
-        db: AsyncSession = Depends(get_db)  # Your DB dependency
+@router.post("/token", response_model=TokenResponse)
+async def token_exchange(
+    request: Request,
+    response: Response,
+    body: TokenExchangeRequest
 ):
     """
-    Handle OAuth callback from Angular
-    1. Exchange code for tokens with Google
-    2. Verify ID token
-    3. Create/update user
-    4. Issue internal tokens
+    Exchange authorization code for tokens.
+    
+    Security: PKCE code_verifier is validated by Google.
+    Returns access_token in body, refresh_token in HttpOnly cookie.
     """
     try:
-        # Exchange authorization code for Google tokens
-        google_tokens = await exchange_code_for_tokens(
-            payload.code,
-            payload.code_verifier
+        # Exchange code with Google (includes PKCE verification)
+        google_tokens = await exchange_code_for_tokens(body.code, body.code_verifier)
+        
+        # Verify ID token
+        id_token_payload = await verify_google_id_token(google_tokens.id_token)
+        
+        # Get user info from Google
+        user_info = await get_google_user_info(google_tokens.access_token)
+        
+        # Create or update user in database
+        user = await create_or_update_user(user_info)
+        
+        # Generate our own refresh token (don't expose Google's)
+        refresh_token = generate_refresh_token()
+        
+        # Store refresh token in database
+        device_info = {
+            "user_agent": request.headers.get("user-agent"),
+            "ip": request.client.host if request.client else None
+        }
+        await store_refresh_token(user.id, refresh_token, device_info)
+        
+        # Set HttpOnly cookie with refresh token
+        # CRITICAL: Secure=True in production (HTTPS), SameSite=Strict for CSRF protection
+        response.set_cookie(
+            key="refresh_token",
+            value=refresh_token,
+            httponly=True,  # Prevents XSS access
+            secure=not settings.DEBUG,  # HTTPS only in production
+            samesite="strict",  # CSRF protection
+            max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+            path="/api/google-auth"  # Limit cookie scope
         )
-
-        # Verify ID token and extract claims
-        id_token = google_tokens["id_token"]
-        google_claims = await verify_google_id_token(id_token)
-
-        # Get or create user
-        user = await get_or_create_user(db, google_claims)
-
-        # Generate internal tokens
-        access_token = create_access_token(
-            user.id,
-            user.email,
-            extra_claims={"is_superuser": user.is_superuser}
-        )
-        refresh_token = create_refresh_token()
-
-        # Store refresh token
-        await store_refresh_token(db, user.id, refresh_token, request)
-
-        # Set secure cookies
-        set_auth_cookies(response, access_token, refresh_token)
-
+        
         # Audit log
-        audit = AuditLog(
+        await create_audit_log(
             user_id=user.id,
             event_type="login",
-            event_status="success",
-            ip_address=request.client.host if request.client else None,
-            user_agent=request.headers.get("user-agent")
+            event_data={"method": "google_oauth"},
+            request=request
         )
-        db.add(audit)
-        await db.commit()
-
-        logger.info(f"User authenticated: {user.id}")
-
+        
+        # Return access token in response body (Google's ID token)
         return TokenResponse(
-            user={
-                "id": str(user.id),
-                "email": user.email,
-                "full_name": user.full_name,
-                "picture_url": user.picture_url,
-                "is_verified": user.is_verified
-            }
+            access_token=google_tokens.id_token,  # Use Google's ID token as access token
+            token_type="bearer",
+            expires_in=google_tokens.expires_in,
+            user=UserResponse(
+                id=user.id,
+                email=user.email,
+                user_name=user.name,
+                picture=user.picture,
+                email_verified=user.email_verified
+            )
         )
-
-    except HTTPException:
-        raise
+        
     except Exception as e:
-        logger.error(f"Authentication error: {e}", exc_info=True)
+        # Log error for monitoring
+        print(f"Token exchange error: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Authentication failed"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Failed to exchange authorization code"
         )
 
 
-@router.post("/refresh")
-async def refresh_token_endpoint(
-        request: Request,
-        response: Response,
-        db: AsyncSession = Depends(get_db)
+@router.post("/refresh", response_model=TokenResponse)
+async def refresh_access_token(
+    request: Request,
+    response: Response,
+    refresh_token: Optional[str] = Cookie(None, alias="refresh_token")
 ):
     """
-    Refresh access token using refresh token from cookie
-    Security: Validates refresh token, optionally rotates it
+    Refresh access token using refresh token from HttpOnly cookie.
+    
+    Security: Implements refresh token rotation - old token is revoked.
     """
-    refresh_token = request.cookies.get("refresh_token")
-
     if not refresh_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="No refresh token provided"
+            detail="Refresh token not found"
         )
-
-    token_hash = hash_token(refresh_token)
-
-    # Find refresh token in database
-    stmt = select(RefreshToken).where(
-        RefreshToken.token_hash == token_hash,
-        RefreshToken.revoked_at.is_(None),
-        RefreshToken.expires_at > datetime.utcnow()
-    )
-    result = await db.execute(stmt)
-    token_record = result.scalar_one_or_none()
-
-    if not token_record:
+    
+    # Verify refresh token and get user
+    user = await verify_refresh_token(refresh_token)
+    
+    if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired refresh token"
         )
-
-    # Optional: Validate user_agent matches (fingerprinting)
-    # current_ua = request.headers.get("user-agent", "")[:512]
-    # if token_record.user_agent != current_ua:
-    #     logger.warning(f"User-agent mismatch for user {token_record.user_id}")
-
-    # Get user
-    stmt = select(User).where(User.id == token_record.user_id)
-    result = await db.execute(stmt)
-    user = result.scalar_one()
-
-    # Generate new access token
-    new_access_token = create_access_token(
-        user.id,
-        user.email,
-        extra_claims={"is_superuser": user.is_superuser}
+    
+    # Generate new refresh token (rotation)
+    new_refresh_token = generate_refresh_token()
+    
+    # Store new refresh token
+    device_info = {
+        "user_agent": request.headers.get("user-agent"),
+        "ip": request.client.host if request.client else None
+    }
+    new_token_record = await store_refresh_token(user.id, new_refresh_token, device_info)
+    
+    # Revoke old refresh token
+    await revoke_refresh_token(refresh_token, replaced_by=new_token_record.id)
+    
+    # Set new refresh token cookie
+    response.set_cookie(
+        key="refresh_token",
+        value=new_refresh_token,
+        httponly=True,
+        secure=not settings.DEBUG,
+        samesite="strict",
+        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+        path="/api/google-auth"
     )
-
-    # Optional: Rotate refresh token (best practice)
-    new_refresh_token = create_refresh_token()
-    token_record.revoked_at = datetime.utcnow()
-    token_record.replaced_by_id = (await store_refresh_token(
-        db, user.id, new_refresh_token, request
-    )).id
-    await db.commit()
-
-    # Set new cookies
-    set_auth_cookies(response, new_access_token, new_refresh_token)
-
-    logger.info(f"Token refreshed for user: {user.id}")
-
-    return {"success": True}
+    
+    # For simplicity, we return a simple JWT here
+    # In production, you might exchange with Google for a new ID token
+    # or issue your own JWT signed with your secret
+    
+    # For now, client should re-authenticate with Google if access token expires
+    # This endpoint primarily demonstrates refresh token rotation
+    
+    # Audit log
+    await create_audit_log(
+        user_id=user.id,
+        event_type="token_refresh",
+        event_data=None,
+        request=request
+    )
+    
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED,
+        detail="Client should re-authenticate with Google for new access token"
+    )
 
 
 @router.post("/logout")
 async def logout(
-        request: Request,
-        response: Response,
-        db: AsyncSession = Depends(get_db)
+    request: Request,
+    response: Response,
+    refresh_token: Optional[str] = Cookie(None, alias="refresh_token"),
+    current_user: User = Depends(get_current_user)
 ):
     """
-    Logout user and revoke refresh token
-    Security: Adds token to revocation list
+    Logout current user by revoking refresh token.
     """
-    refresh_token = request.cookies.get("refresh_token")
-
     if refresh_token:
-        token_hash = hash_token(refresh_token)
-
-        # Revoke refresh token
-        stmt = select(RefreshToken).where(RefreshToken.token_hash == token_hash)
-        result = await db.execute(stmt)
-        token_record = result.scalar_one_or_none()
-
-        if token_record:
-            token_record.revoked_at = datetime.utcnow()
-
-            # Audit log
-            audit = AuditLog(
-                user_id=token_record.user_id,
-                event_type="logout",
-                event_status="success",
-                ip_address=request.client.host if request.client else None
-            )
-            db.add(audit)
-            await db.commit()
-
-    # Clear cookies
-    response.delete_cookie("access_token", path="/", domain=settings.COOKIE_DOMAIN)
-    response.delete_cookie("refresh_token", path="/api/auth", domain=settings.COOKIE_DOMAIN)
-
-    return {"success": True, "message": "Logged out successfully"}
+        await revoke_refresh_token(refresh_token)
+    
+    # Clear refresh token cookie
+    response.delete_cookie(key="refresh_token", path="/api/google-auth")
+    
+    # Audit log
+    await create_audit_log(
+        user_id=current_user.id,
+        event_type="logout",
+        event_data=None,
+        request=request
+    )
+    
+    return {"message": "Logged out successfully"}
 
 
-# ============ Dependency for Protected Routes ============
-
-async def get_current_user(
-        request: Request,
-        db: AsyncSession = Depends(get_db)
-) -> User:
+@router.post("/logout-all")
+async def logout_all_devices(
+    request: Request,
+    response: Response,
+    current_user: User = Depends(get_current_user)
+):
     """
-    Dependency to extract and validate user from access token cookie
-    Usage: user = Depends(get_current_user)
+    Logout from all devices by revoking all refresh tokens for user.
     """
-    access_token = request.cookies.get("access_token")
+    await revoke_all_user_tokens(current_user.id)
+    
+    # Clear current device's refresh token cookie
+    response.delete_cookie(key="refresh_token", path="/api/google-auth")
+    
+    # Audit log
+    await create_audit_log(
+        user_id=current_user.id,
+        event_type="logout_all",
+        event_data=None,
+        request=request
+    )
+    
+    return {"message": "Logged out from all devices"}
 
-    if not access_token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated"
-        )
 
-    try:
-        # Decode and validate JWT
-        payload = jwt.decode(
-            access_token,
-            settings.JWT_SECRET_KEY,
-            algorithms=[ALGORITHM],
-            audience=settings.JWT_AUDIENCE,
-            issuer=settings.JWT_ISSUER
-        )
-
-        user_id_str: str = payload.get("sub")
-        if user_id_str is None:
-            raise HTTPException(status_code=401, detail="Invalid token")
-
-        user_id = uuid.UUID(user_id_str)
-
-    except JWTError as e:
-        logger.error(f"JWT validation error: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication credentials"
-        )
-
-    # Fetch user from database
-    stmt = select(User).where(User.id == user_id)
-    result = await db.execute(stmt)
-    user = result.scalar_one_or_none()
-
-    if user is None or not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found or inactive"
-        )
-
-    return user
+@router.get("/me", response_model=UserResponse)
+async def get_current_user_info(current_user: User = Depends(get_current_user)):
+    """
+    Get current authenticated user information.
+    Protected endpoint example.
+    """
+    return UserResponse(
+        id=current_user.id,
+        email=current_user.email,
+        user_name=current_user.name,
+        picture=current_user.picture,
+        email_verified=current_user.email_verified
+    )

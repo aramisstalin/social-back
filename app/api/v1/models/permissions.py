@@ -1,16 +1,19 @@
-import uuid
-from sqlalchemy import Column, UniqueConstraint
-from sqlalchemy.dialects.mssql import VARCHAR
-from sqlalchemy.orm import relationship
-
 from app.core.models import Base
+from sqlalchemy.orm import relationship, mapped_column, Mapped
+from typing import List, Optional
+from sqlalchemy import String
+
 
 class Permission(Base):
+    """Defines an atomic action, typically in RESOURCE:ACTION format."""
     __tablename__ = "permissions"
-    __table_args__ = (UniqueConstraint("name"),)
 
-    id = Column(primary_key=True, default=uuid.uuid4)
-    name = Column(VARCHAR(255), nullable=False)
-    description = Column(VARCHAR(255), nullable=True)
+    # The permission string (e.g., 'invoice:read', 'user:delete', 'project:billing')
+    code: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(String)
 
-    roles = relationship("Role", secondary="role_permission", back_populates="permissions")
+    # Relationship to role linkages
+    roles: Mapped[List["RolePermission"]] = relationship(back_populates="permission")
+
+    def __repr__(self):
+        return f"<Permission(code='{self.code}')>"

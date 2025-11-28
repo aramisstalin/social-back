@@ -8,10 +8,8 @@ from sqlalchemy.ext.asyncio import (
 
 engine = create_async_engine(
     settings.DATABASE_URL,
-    pool_pre_ping=True,  # Verify connections before using
-    # echo=settings.DEBUG,  # Set to True to see generated SQL statements
-    pool_size=20,
-    max_overflow=10
+    pool_pre_ping=True,
+    echo=False,  # Set to True to see generated SQL statements
     )
 
 AsyncSessionLocal = async_sessionmaker(
@@ -32,8 +30,4 @@ async def get_db():
     """
 
     async with AsyncSessionLocal() as session:
-        # yield session
-        try:
-            yield session
-        finally:
-            await session.close()
+        yield session

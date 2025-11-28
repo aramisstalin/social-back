@@ -4,50 +4,54 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from starlette.middleware.trustedhost import TrustedHostMiddleware
+from contextlib import asynccontextmanager
 
-# from contextlib import asynccontextmanager
-
+from app.core.services import get_http_client_manager
 from app.core.middlewares import security_headers_middleware, request_logging_middleware, rate_limit_exceeded_handler
 from app.core.bootstrap import bootstrap_app
 from app.core.config import settings
 from app.core.middlewares import CORSPreflightMiddleware
 from app.api.v1.routers.auth import limiter
-from app.core.middlewares.logging import logger
+import logging
 
-"""
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO if not settings.DEBUG else logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    #
-    Startup: Create tables, initialize connections
-    Shutdown: Close connections gracefully
-    #
-    # Startup
-    logger.info("Starting up application...")
+    """
+    Handles application startup and shutdown events, ensuring external resources
+    like the HTTP client pool are initialized and cleaned up properly.
+    """
+    logger.info("Starting application...")
+    manager = get_http_client_manager()
+    logger.info("Initializing HTTP Client Pool...")
+    await manager.initialize()
+    # await db.connect()
+    # logger.info("Database connected")
     
-    # Create tables (in production, use Alembic migrations)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    
-    logger.info("Database tables created/verified")
-    
-    yield  # Application runs
+    yield
     
     # Shutdown
     logger.info("Shutting down application...")
-    await engine.dispose()
-    logger.info("Database connections closed")
-"""
+    logger.info("Closing HTTP Client Pool...")
+    await manager.close()
+    # await db.disconnect()
+    #logger.info("Database disconnected")
 
-
-#    lifespan=lifespan,
 app = FastAPI(
     title=settings.PROJECT_NAME,
     debug=settings.DEBUG,
     version=settings.VERSION,
-    openapi_url=f"{settings.API_V1_STR}/openapi.json"if settings.DEBUG else None,  # Disable in production
-    docs_url=f"{settings.API_V1_STR}/docs" if settings.DEBUG else None,  # Disable in production,
-    redoc_url=f"{settings.API_V1_STR}/redoc" if settings.DEBUG else None,  # Disable in production
+    lifespan=lifespan,
+    openapi_url=f"{settings.API_V1_STR}/openapi.json",
+    docs_url=f"{settings.API_V1_STR}/docs",
+    redoc_url=f"{settings.API_V1_STR}/redoc"
     )
 
 # Add rate limiter state to app
@@ -65,45 +69,10 @@ app.add_middleware(
     allow_origins=origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"],
-    allow_headers=["Content-type", "Authorization", "X-Requested-With"],  #* More permissive for compatibility
+    allow_headers=["*"],  # More permissive for compatibility
     expose_headers=["Content-Length", "Content-Type"],
     max_age=600,  # Cache preflight requests for 10 minutes
 )
-
-# Trusted host middleware (prevent Host header attacks)
-if not settings.DEBUG:
-    app.add_middleware(
-        TrustedHostMiddleware,
-        allowed_hosts=settings.ALLOWED_HOSTS  # ["yourapp.com", "*.yourapp.com"]
-    )
-
-# Security headers middleware
-app.middleware("http")(security_headers_middleware)
-
-# Request logging middleware
-app.middleware("http")(request_logging_middleware)
-
-# Exception handlers
-app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
-
-
-@app.exception_handler(404)
-async def not_found_handler(request: Request, exc):
-    """Custom 404 handler"""
-    return JSONResponse(
-        status_code=404,
-        content={"detail": "Endpoint not found"}
-    )
-
-
-@app.exception_handler(500)
-async def internal_error_handler(request: Request, exc):
-    """Custom 500 handler - don't expose internal details"""
-    logger.error(f"Internal server error: {exc}", exc_info=True)
-    return JSONResponse(
-        status_code=500,
-        content={"detail": "Internal server error"}
-    )
 
 
 @app.exception_handler(Exception)
@@ -131,6 +100,16 @@ async def global_exception_handler(request: Request, exc: Exception):
         status_code=500,
         content=response_content,
     )
+
+# Security headers middleware
+app.middleware("http")(security_headers_middleware)
+
+# Request logging middleware
+app.middleware("http")(request_logging_middleware)
+
+# Exception handlers
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+
 
 bootstrap_app(app)
 

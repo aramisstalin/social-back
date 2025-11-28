@@ -1,24 +1,24 @@
-fastapi==0.116.1
-starlette
-uvicorn[standard]==0.34.3
-sqlalchemy[asyncio]==2.0.41
+fastapi==0.122.0
+uvicorn[standard]==0.38.0
+sqlalchemy[asyncio]==2.0.44
 #aioodbc==0.5.0
-pydantic==2.11.7
-pydantic[email]==2.11.7
-pydantic-settings==2.10.1
+pydantic==2.12.5
+pydantic[email]==2.12.5
+pydantic-settings==2.12.0
 httpx==0.28.1
 tenacity==9.1.2
 python-jose[cryptography]==3.5.0
-#passlib[bcrypt]==1.7.4
-bcrypt==4.3.0
+passlib[bcrypt]==1.7.4
+bcrypt==3.2.0
 python-multipart==0.0.20
-aiosmtplib==4.0.1
+aiosmtplib==5.0.0
 slowapi==0.1.9
-asyncpg==0.30.0
-redis==5.0.0
-fastapi-users==15.0.1
-fastapi-users-db-sqlalchemy==7.0.0
+asyncpg==0.31.0
+redis==7.1.0
+
+alembic==1.17.2
+
 # dev dependencies
 # debugpy
 
-python-dotenv==1.0.0
+python-dotenv==1.2.1

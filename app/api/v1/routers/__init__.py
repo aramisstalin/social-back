@@ -3,7 +3,8 @@ from . import (
     google_auth,
     permissions,
     roles,
-    users
+    users,
+    social_auth
 )
 
 __all__ = [
@@ -11,5 +12,6 @@ __all__ = [
     "google_auth",
     "permissions",
     "roles",
-    "users"
+    "users",
+    "social_auth",
 ]

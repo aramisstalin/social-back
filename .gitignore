@@ -13,9 +13,9 @@ alembic/
 alembic/versions
 alembic.ini
 
-docker-compose.yml
-conftest.py
-pytest.ini
+# docker-compose.yml
+# conftest.py
+# pytest.ini
 
 # IDEs and editors
 .editorconfig
@@ -24,7 +24,7 @@ pytest.ini
 
 # Visual Studio Code
 .vscode/
-.devcontainer/
+# .devcontainer/
 !.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
