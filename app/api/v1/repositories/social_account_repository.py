@@ -10,17 +10,12 @@ from sqlalchemy.orm import selectinload
 from app.core.helpers.filter_helper import paginate, apply_filters_and_sorting
 from app.core.repositories import BaseRepository
 from app.api.v1.models import User as UserModel, Role as RoleModel
-from app.api.v1.schemas import UserRead as User, UserFilter #, UserWithRoles
+from app.api.v1.schemas import User, UserFilter, UserWithRoles
 
 
-class UserRepository(BaseRepository):
+class SocialAccountRepository(BaseRepository):
     def __init__(self):
         super().__init__(UserModel)
-
-    async def get_all(self, db: AsyncSession, skip: int = 0, limit: int = 20) -> List[User]:
-        users = await db.execute(select(self.model).offset(skip).limit(limit))
-        orm_users = users.scalars().all()
-        return [User.model_validate(u) for u in orm_users]
 
     async def get_filtered_items(self, db: AsyncSession, filters: UserFilter):
         try:
@@ -43,7 +38,7 @@ class UserRepository(BaseRepository):
         except Exception as e:
             raise ValueError(f"Filtrando {self.model.__name__}: ocorreu um erro. Verifique os dados. {e}")
 
-    async def get_by_id(self, db: AsyncSession, user_id: UUID) -> Optional[User]:
+    async def get_by_id(self, db: AsyncSession, user_id: UUID) -> Optional[UserWithRoles]:
         """
         Retrieve a User by ID and return as Pydantic schema.
 
@@ -52,12 +47,12 @@ class UserRepository(BaseRepository):
             user_id: User's unique identifier
 
         Returns:
-            User Pydantic schema or None if not found
+            UserWithRoles Pydantic schema or None if not found
         """
         query = self._build_user_query_with_relationships().where(self.model.id == user_id)
         result = await db.execute(query)
         orm_user = result.scalars().first()
-        return User.model_validate(orm_user) if orm_user else None
+        return UserWithRoles.model_validate(orm_user) if orm_user else None
 
     def _build_user_query_with_relationships(self):
         """
@@ -101,7 +96,7 @@ class UserRepository(BaseRepository):
         result = await db.execute(query)
         return result.scalars().first()
 
-    async def get_user_by_cpf(self, db: AsyncSession, cpf: str) -> Optional[User]:
+    async def get_user_by_cpf(self, db: AsyncSession, cpf: str) -> Optional[UserWithRoles]:
         """
         Retrieve a User by CPF and return as Pydantic schema.
 
@@ -120,7 +115,7 @@ class UserRepository(BaseRepository):
             - Returns immutable Pydantic model to prevent accidental modifications
         """
         orm_user = await self._get_user_orm_by_cpf(db, cpf)
-        return User.model_validate(orm_user) if orm_user else None
+        return UserWithRoles.model_validate(orm_user) if orm_user else None
 
     async def get_user_orm_by_cpf(self, db: AsyncSession, cpf: str) -> Optional[UserModel]:
         """
@@ -170,7 +165,7 @@ class UserRepository(BaseRepository):
         result = await db.execute(query)
         return result.scalars().first()
 
-    async def get_user_by_email(self, db: AsyncSession, email: EmailStr) -> Optional[User]:
+    async def get_user_by_email(self, db: AsyncSession, email: EmailStr) -> Optional[UserWithRoles]:
         """
         Retrieve a User by email and return as Pydantic schema.
 
@@ -182,14 +177,14 @@ class UserRepository(BaseRepository):
             email: User's email address
 
         Returns:
-            User Pydantic schema or None if not found
+            UserWithRoles Pydantic schema or None if not found
 
         Security:
             - Email is validated by Pydantic EmailStr type
             - Returns immutable Pydantic model to prevent accidental modifications
         """
         orm_user = await self._get_user_orm_by_email(db, email)
-        return User.model_validate(orm_user) if orm_user else None
+        return UserWithRoles.model_validate(orm_user) if orm_user else None
 
     async def get_user_orm_by_email(self, db: AsyncSession, email: EmailStr) -> Optional[UserModel]:
         """
@@ -274,5 +269,5 @@ class UserRepository(BaseRepository):
 
 
 @lru_cache()
-def get_user_repository() -> UserRepository:
-    return UserRepository()
+def get_social_account_repository() -> SocialAccountRepository:
+    return SocialAccountRepository()

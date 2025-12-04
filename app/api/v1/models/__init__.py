@@ -5,6 +5,8 @@ from .role_permission import RolePermission
 from .users  import User
 from .user_role import UserRole
 from .social_account import SocialAccount
+from .refresh_tokens import RefreshToken
+from .audit_log import AuditLog
 
 
 __all__ = [
@@ -14,5 +16,7 @@ __all__ = [
     "RolePermission",
     "User",
     "UserRole",
-    "SocialAccount"
+    "SocialAccount",
+    "RefreshToken",
+    "AuditLog"
 ]

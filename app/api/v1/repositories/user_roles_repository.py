@@ -4,7 +4,7 @@ from fastapi import status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.schemas import ApiResponse
-from app.api.v1.schemas import UserWithRoles
+from app.api.v1.schemas import UserRead as User
 from app.api.v1.repositories import RoleRepository, UserRepository, get_role_repository, get_user_repository
 
 

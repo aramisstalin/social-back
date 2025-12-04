@@ -1,15 +1,22 @@
 import traceback
-from fastapi import FastAPI, Request
+from typing import Annotated
+
+from fastapi import FastAPI, Request, status
+from fastapi.params import Depends
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from contextlib import asynccontextmanager
 
+from app.core.schemas import ApiResponse
+from app.api.v1.schemas import UserRead as User
+from app.api.v1.services import get_current_user
 from app.core.services import get_http_client_manager
 from app.core.middlewares import security_headers_middleware, request_logging_middleware, rate_limit_exceeded_handler
 from app.core.bootstrap import bootstrap_app
 from app.core.config import settings
+from app.db import db_manager
 from app.core.middlewares import CORSPreflightMiddleware
 from app.api.v1.routers.auth import limiter
 import logging
@@ -28,21 +35,34 @@ async def lifespan(app: FastAPI):
     Handles application startup and shutdown events, ensuring external resources
     like the HTTP client pool are initialized and cleaned up properly.
     """
+    # Start
     logger.info("Starting application...")
+
+    # Client Http
     manager = get_http_client_manager()
     logger.info("Initializing HTTP Client Pool...")
     await manager.initialize()
-    # await db.connect()
-    # logger.info("Database connected")
+    logger.info("HTTP Client initialized.")
+
+    # Database connection
+    logger.info("Initializing database connection...")
+    await db_manager.connect()
+    logger.info("Database connected.")
     
     yield
     
     # Shutdown
     logger.info("Shutting down application...")
+
+    # Disconnect: Clean up the connection pool
+    logger.info("Disconnecting database pool...")
+    await db_manager.disconnect()
+    logger.info("Database pool disconnected.")
+
+    # Closing HTTP Client Pool
     logger.info("Closing HTTP Client Pool...")
     await manager.close()
-    # await db.disconnect()
-    #logger.info("Database disconnected")
+
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -128,6 +148,34 @@ async def root():
         "message": "FastAPI Google OAuth API",
         "docs": "/api/docs" if settings.DEBUG else "disabled"
     }
+
+@app.get(
+    "/data",
+    response_model=ApiResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get protected data",
+    description="Returns protected data for authenticated users only."
+)
+async def get_protected_data(
+    current_user: Annotated[User, Depends(get_current_user)]
+):
+    """
+    Example protected endpoint that requires a valid Bearer JWT.
+
+    The `get_current_user` dependency:
+    - Extracts the bearer token via HTTPBearer
+    - Validates Google ID token
+    - Fetches the user from DB
+    - Ensures user is active
+    - Raises HTTP_401_UNAUTHORIZED if invalid
+    """
+    return ApiResponse(
+        status_code=status.HTTP_200_OK,
+        data={
+            "message": f"Hello, {current_user.name}. Your data is secured!",
+            "user_id": current_user.id
+        }
+    )
 
 if __name__ == "__main__":
     import uvicorn

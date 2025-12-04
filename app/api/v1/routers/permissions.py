@@ -3,7 +3,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.db.session import get_db
+from app.db.session import get_session
 
 from app.core.schemas import ApiResponse
 from app.core.routers import read_item, filter, update, create, delete
@@ -22,7 +22,7 @@ async def read_permission(
         permission_id: UUID,
         admin: Annotated[bool, Depends(get_current_admin_user)],
         api_key: Annotated[str, Depends(verify_api_key)],
-        db: Annotated[AsyncSession, Depends(get_db)],
+        db: Annotated[AsyncSession, Depends(get_session)],
         permissions_repository: Annotated[PermissionRepository, Depends(get_permission_repository)]
 ):
     return await read_item(permission_id, db, permissions_repository, Permission.model_validate)
@@ -34,7 +34,7 @@ async def update_permission(
         permission: PermissionUpdate,
         admin: Annotated[bool, Depends(get_current_admin_user)],
         api_key: Annotated[str, Depends(verify_api_key)],
-        db: Annotated[AsyncSession, Depends(get_db)],
+        db: Annotated[AsyncSession, Depends(get_session)],
         permissions_repository: Annotated[PermissionRepository, Depends(get_permission_repository)]
 ):
     return await update(permission_id, permission, db, permissions_repository, Permission.model_validate)
@@ -45,7 +45,7 @@ async def delete_permission(
         permission_id: UUID,
         admin: Annotated[bool, Depends(get_current_admin_user)],
         api_key: Annotated[str, Depends(verify_api_key)],
-        db: Annotated[AsyncSession, Depends(get_db)],
+        db: Annotated[AsyncSession, Depends(get_session)],
         permissions_repository: Annotated[PermissionRepository, Depends(get_permission_repository)]
 ):
     return await delete(permission_id, db, permissions_repository)
@@ -56,7 +56,7 @@ async def create_permission(
         permission: PermissionCreate,
         admin: Annotated[bool, Depends(get_current_admin_user)],
         api_key: Annotated[str, Depends(verify_api_key)],
-        db: Annotated[AsyncSession, Depends(get_db)],
+        db: Annotated[AsyncSession, Depends(get_session)],
         permissions_repository: Annotated[PermissionRepository, Depends(get_permission_repository)]
 ):
     return await create(db, permission, permissions_repository, Permission.model_validate)
@@ -67,7 +67,7 @@ async def filter_permissions(
         filters: Annotated[PermissionFilter, Depends()],
         admin: Annotated[bool, Depends(get_current_admin_user)],
         api_key: Annotated[str, Depends(verify_api_key)],
-        db: Annotated[AsyncSession, Depends(get_db)],
+        db: Annotated[AsyncSession, Depends(get_session)],
         permissions_repository: Annotated[PermissionRepository, Depends(get_permission_repository)]
 ):
     return await filter(filters, db, permissions_repository, Permission.model_validate)

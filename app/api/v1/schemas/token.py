@@ -3,7 +3,7 @@ from typing import Optional
 from pydantic import Field
 from app.core.schemas import BaseSchema
 from uuid import UUID
-from .users import UserResponse
+from app.api.v1.schemas import UserRead as User
 
 
 class Token(BaseSchema):
@@ -43,4 +43,4 @@ class TokenResponse(BaseSchema):
     access_token: str
     token_type: str = "bearer"
     expires_in: int
-    user: UserResponse
+    user: User

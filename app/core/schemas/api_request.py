@@ -1,4 +1,4 @@
-from app.core.schemas import BaseSchema, SocialUser
+from app.core.schemas import BaseSchema
 
 class CodeExchangeRequest(BaseSchema):
     code: str
@@ -8,4 +8,4 @@ class CodeExchangeRequest(BaseSchema):
 class TokenResponse(BaseSchema):
     access_token: str
     expires_in: int
-    user: SocialUser
+    user: dict

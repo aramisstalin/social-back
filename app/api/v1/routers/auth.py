@@ -37,8 +37,8 @@ from app.api.v1.schemas import (
     SendVerificationEmail,
     Token,
     UserCreate,
-    UserUpdateVerificationToken,
-    UserUpdateEmailVerified,
+    # UserUpdateVerificationToken,
+    # UserUpdateEmailVerified,
 )
 from app.api.v1.services import AuthService, get_auth_service
 from app.core.config import settings
@@ -52,7 +52,7 @@ from app.core.security import (
     verify_api_key,
 )
 from app.core.services import send_verification_email
-from app.db.session import get_db
+from app.db.session import get_session
 
 # Configure module logger
 logger = logging.getLogger(__name__)
@@ -98,7 +98,7 @@ async def register_user(
     request: Request,
     user_in: UserCreate,
     api_key: Annotated[str, Depends(verify_api_key)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_session)],
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> ApiResponse:
     """
@@ -160,7 +160,7 @@ async def register_user(
 async def resend_verification_email(
     payload: SendVerificationEmail,
     api_key: Annotated[str, Depends(verify_api_key)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_session)],
     user_repository: Annotated[UserRepository, Depends(get_user_repository)],
 ) -> ApiResponse:
     """
@@ -249,7 +249,7 @@ async def resend_verification_email(
 async def verify_email(
     token: str,
     api_key: Annotated[str, Depends(verify_api_key)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_session)],
     user_repository: Annotated[UserRepository, Depends(get_user_repository)],
 ) -> ApiResponse:
     """
@@ -350,7 +350,7 @@ async def login_for_access_token(
     request: Request,
     response: Response,
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_session)],
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> Token:
     """
@@ -597,7 +597,7 @@ async def request_password_reset(
     request: Request,
     pr: PasswordResetRequest,
     api_key: Annotated[str, Depends(verify_api_key)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_session)],
     user_repository: Annotated[UserRepository, Depends(get_user_repository)],
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> ApiResponse:
@@ -665,7 +665,7 @@ async def request_password_reset(
 async def reset_password(
     pr: PasswordReset,
     api_key: Annotated[str, Depends(verify_api_key)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_session)],
     user_repository: Annotated[UserRepository, Depends(get_user_repository)],
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> ApiResponse:
@@ -747,7 +747,7 @@ async def reset_password(
 async def get_user_info(
     request: Request,
     api_key: Annotated[str, Depends(verify_api_key)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_session)],
     user_repository: Annotated[UserRepository, Depends(get_user_repository)],
 ) -> ApiResponse:
     """

@@ -12,3 +12,5 @@ class SocialUser(BaseSchema):
 
 class TokenData(BaseSchema):
     user_id: str
+    exp: int
+    sub: str

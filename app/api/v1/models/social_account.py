@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import enum
 import uuid
-from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
@@ -46,7 +45,6 @@ class SocialAccount(BaseModel):
         PG_UUID(as_uuid=True),
         primary_key=True,
         nullable=False,
-        default=uuid.uuid4,  # python-side default (callable)
         server_default=text("gen_random_uuid()"),  # Postgres extension (pgcrypto) or uuid-ossp; optional
     )
 
@@ -73,19 +71,6 @@ class SocialAccount(BaseModel):
         lazy="selectin",
     )
 
-    # Timestamps
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        onupdate=func.now(),
-        nullable=False,
-    )
-
     def __repr__(self) -> str:
         return (
             f"<SocialAccount(id={self.id!s} provider={self.provider_name.value!s} "
@@ -97,9 +82,7 @@ class SocialAccount(BaseModel):
             "id": str(self.id),
             "provider_name": self.provider_name.value,
             "provider_user_id": self.provider_user_id,
-            "user_id": str(self.user_id),
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "user_id": str(self.user_id)
         }
 
 """

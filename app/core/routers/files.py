@@ -9,7 +9,7 @@ from app.core.security import verify_api_key, get_current_active_validated_user
 from app.core.schemas.api_response import ApiResponse
 from app.core.schemas.files import FileResponse
 from app.core.repositories import FileRepository, get_file_repository
-from app.db.session import get_db
+from app.db.session import get_session
 
 prefix = "/file"
 router = APIRouter(prefix=prefix)
@@ -19,7 +19,7 @@ async def upload_file(
         file: UploadFile,
         current_user: Annotated[UserModel, Depends(get_current_active_validated_user)],
         api_key: Annotated[str, Depends(verify_api_key)],
-        db: Annotated[AsyncSession, Depends(get_db)],
+        db: Annotated[AsyncSession, Depends(get_session)],
         file_service: Annotated[FileRepository, Depends(get_file_repository)]
 ):
     """
@@ -80,7 +80,7 @@ async def get_file_info(
         file_id: str,
         current_user: Annotated[UserModel, Depends(get_current_active_validated_user)],
         api_key: Annotated[str, Depends(verify_api_key)],
-        db: Annotated[AsyncSession, Depends(get_db)],
+        db: Annotated[AsyncSession, Depends(get_session)],
         file_service: Annotated[FileRepository, Depends(get_file_repository)]
 ):
     """
@@ -105,7 +105,7 @@ async def delete_file(
         file_id: str,
         current_user: Annotated[UserModel, Depends(get_current_active_validated_user)],
         api_key: Annotated[str, Depends(verify_api_key)],
-        db: Annotated[AsyncSession, Depends(get_db)],
+        db: Annotated[AsyncSession, Depends(get_session)],
         file_service: Annotated[FileRepository, Depends(get_file_repository)]
 ):
     """

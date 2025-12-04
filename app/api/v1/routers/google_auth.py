@@ -1,14 +1,11 @@
 from fastapi import APIRouter, HTTPException, status, Response, Request, Cookie, Depends
 from typing import Optional
-from datetime import timedelta
 
 from app.core.config import settings
 from app.api.v1.schemas import (
     TokenExchangeRequest,
     TokenResponse,
-    User,
-    UserResponse,
-    RefreshTokenRequest
+    UserRead as User
 )
 from app.api.v1.services import (
     exchange_code_for_tokens,
@@ -45,7 +42,7 @@ async def token_exchange(
         google_tokens = await exchange_code_for_tokens(body.code, body.code_verifier)
         
         # Verify ID token
-        id_token_payload = await verify_google_id_token(google_tokens.id_token)
+        await verify_google_id_token(google_tokens.id_token)
         
         # Get user info from Google
         user_info = await get_google_user_info(google_tokens.access_token)
@@ -88,12 +85,12 @@ async def token_exchange(
             access_token=google_tokens.id_token,  # Use Google's ID token as access token
             token_type="bearer",
             expires_in=google_tokens.expires_in,
-            user=UserResponse(
+            user=User(
                 id=user.id,
                 email=user.email,
-                user_name=user.name,
-                picture=user.picture,
-                email_verified=user.email_verified
+                username=user.name,
+                avatar=user.picture,
+                is_email_verified=user.email_verified
             )
         )
         
@@ -229,16 +226,16 @@ async def logout_all_devices(
     return {"message": "Logged out from all devices"}
 
 
-@router.get("/me", response_model=UserResponse)
+@router.get("/me", response_model=User)
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
     """
     Get current authenticated user information.
     Protected endpoint example.
     """
-    return UserResponse(
+    return User(
         id=current_user.id,
         email=current_user.email,
-        user_name=current_user.name,
-        picture=current_user.picture,
-        email_verified=current_user.email_verified
+        username=current_user.name,
+        avatar=current_user.picture,
+        is_email_verified=current_user.email_verified
     )

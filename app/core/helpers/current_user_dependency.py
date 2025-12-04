@@ -1,6 +1,6 @@
 from fastapi import Request, status, HTTPException
 from app.core.schemas import SocialUser as User
-from app.core.helpers import decode_token
+from app.core.helpers import verify_jwt_token
 
 
 def get_current_user_from_access_token(request: Request) -> User:
@@ -16,7 +16,7 @@ def get_current_user_from_access_token(request: Request) -> User:
     access_token = auth_header.split(" ")[1]
 
     # 2. Validate token (Decodes token signed by our SECRET_KEY)
-    token_data = decode_token(access_token)
+    token_data = verify_jwt_token(access_token)
     if not token_data:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

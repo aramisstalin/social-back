@@ -7,7 +7,7 @@ from typing_extensions import Annotated
 from functools import wraps
 from fastapi import Depends, status, HTTPException, Header, Request
 from fastapi.security import OAuth2PasswordBearer
-from app.db.session import get_db
+from app.db.session import get_session
 from app.core.config import settings
 
 from app.api.v1.models import User
@@ -74,7 +74,7 @@ def is_token_expired(token: str) -> bool:
 # Validate JWT token
 async def get_current_user(
         request: Request,
-        db = Depends(get_db),
+        db = Depends(get_session),
         user_repository: UserRepository = Depends(get_user_repository),
 ):
     credentials_exception = HTTPException(

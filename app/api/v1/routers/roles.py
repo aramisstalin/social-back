@@ -2,7 +2,7 @@ from typing import List, Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
-from app.db.session import get_db
+from app.db.session import get_session
 
 from app.core.schemas import ApiResponse
 from app.core.security import verify_api_key, get_current_admin_user
@@ -20,7 +20,7 @@ async def revoke_permissions(
         permissions_ids: List[str],
         admin: Annotated[bool, Depends(get_current_admin_user)],
         api_key: Annotated[str, Depends(verify_api_key)],
-        db: Annotated[AsyncSession, Depends(get_db)],
+        db: Annotated[AsyncSession, Depends(get_session)],
         role_permissions_repository: Annotated[RolePermissionsRepository, Depends(get_role_permissions_repository)]
 ):
     """Revoke permissions from a role."""
@@ -34,7 +34,7 @@ async def assign_permissions(
         permissions_ids: List[str],
         admin: Annotated[bool, Depends(get_current_admin_user)],
         api_key: Annotated[str, Depends(verify_api_key)],
-        db: Annotated[AsyncSession, Depends(get_db)],
+        db: Annotated[AsyncSession, Depends(get_session)],
         role_permissions_repository: Annotated[RolePermissionsRepository, Depends(get_role_permissions_repository)]
 ):
     """Assign permissions to a role."""
@@ -47,7 +47,7 @@ async def read_role(
         role_id: UUID,
         admin: Annotated[bool, Depends(get_current_admin_user)],
         api_key: Annotated[str, Depends(verify_api_key)],
-        db: Annotated[AsyncSession, Depends(get_db)],
+        db: Annotated[AsyncSession, Depends(get_session)],
         role_repository: Annotated[RoleRepository, Depends(get_role_repository)]
 ):
     """Get a role by ID, including permissions."""
@@ -64,7 +64,7 @@ async def update_role(
         role: RoleUpdate,
         admin: Annotated[bool, Depends(get_current_admin_user)],
         api_key: Annotated[str, Depends(verify_api_key)],
-        db: Annotated[AsyncSession, Depends(get_db)],
+        db: Annotated[AsyncSession, Depends(get_session)],
         role_repository: Annotated[RoleRepository, Depends(get_role_repository)]
 ):
     """Update a role and return the updated role."""
@@ -80,7 +80,7 @@ async def delete_role(
         role_id: UUID,
         admin: Annotated[bool, Depends(get_current_admin_user)],
         api_key: Annotated[str, Depends(verify_api_key)],
-        db: Annotated[AsyncSession, Depends(get_db)],
+        db: Annotated[AsyncSession, Depends(get_session)],
         role_repository: Annotated[RoleRepository, Depends(get_role_repository)]
 ):
     """Delete a role by ID."""
@@ -95,7 +95,7 @@ async def create_role(
         role: RoleCreate,
         admin: Annotated[bool, Depends(get_current_admin_user)],
         api_key: Annotated[str, Depends(verify_api_key)],
-        db: Annotated[AsyncSession, Depends(get_db)],
+        db: Annotated[AsyncSession, Depends(get_session)],
         role_repository: Annotated[RoleRepository, Depends(get_role_repository)]
 ):
     """Create a new role and return it."""
@@ -109,7 +109,7 @@ async def filter_roles(
         filters: Annotated[RoleFilter, Depends()],
         admin: Annotated[bool, Depends(get_current_admin_user)],
         api_key: Annotated[str, Depends(verify_api_key)],
-        db: Annotated[AsyncSession, Depends(get_db)],
+        db: Annotated[AsyncSession, Depends(get_session)],
         role_repository: Annotated[RoleRepository, Depends(get_role_repository)]
 ):
     """Get a paginated list of roles, including permissions."""

@@ -11,7 +11,7 @@ from app.core.services import send_verification_email, send_reset_password_email
 
 from app.api.v1.models import Role, User as UserModel
 from app.api.v1.repositories import UserRepository, get_user_repository
-from app.api.v1.schemas import User, UserCreate, UserCreateToSave, UserWithRoles
+from app.api.v1.schemas import UserRead as User, UserCreate
 
 from app.core.security import verify_password, get_password_hash, create_verification_token, decode_token, create_access_token
 
@@ -23,7 +23,7 @@ class AuthService:
     def __init__(self, user_repository: UserRepository):
         self.user_repository = user_repository
 
-    async def authenticate_user(self, db: AsyncSession, cpf: str, password: str) -> UserWithRoles | None:
+    async def authenticate_user(self, db: AsyncSession, cpf: str, password: str) -> User | None:
         user = await self.user_repository.get_user_orm_by_cpf(db, cpf)
         if not user:
             return None
@@ -43,7 +43,7 @@ class AuthService:
 
         token = create_verification_token(str(user_in.email))
 
-        user = UserCreateToSave(**user_in.model_dump(), verification_token=token, is_active=True, is_validated=False, email_verified=False)
+        user = UserCreate(**user_in.model_dump(), verification_token=token, is_active=True, is_validated=False, email_verified=False)
         user.hashed_password =get_password_hash(user_in.hashed_password)
 
         try:
